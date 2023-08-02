@@ -71,7 +71,7 @@ class ModelStore:
         Parameters
         ----------
         store_key : str
-            Key suffixed to the model_store_root to save the model to
+            Key suffixed to the model_store_root to download the model from
         download_path : str
             Path to the folder where the model will be downloaded
         """

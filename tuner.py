@@ -28,7 +28,7 @@ def train(
     num_epochs: int = 3,
     learning_rate: float = 3e-4,
     cutoff_len: int = 256,
-    val_set_size: int = 2000,
+    val_set_size: int = 200,
     # lora hyperparams
     lora_r: int = 8,
     lora_alpha: int = 16,
@@ -49,11 +49,42 @@ def train(
     resume_from_checkpoint: str = None,  # either training checkpoint or final adapter
     prompt_template_name: str = "alpaca",  # The prompt template to use, will default to alpaca.
     fp16: bool = True,
+    num_samples:int = None
 ):
     if isinstance(lora_target_modules, str):
         lora_target_modules = (
             lora_target_modules.replace("[", "").replace("]", "").split(",")
         )
+
+    assert (
+        base_model
+    ), "Please specify a --base_model, e.g. --base_model='huggyllama/llama-7b'"
+    gradient_accumulation_steps = batch_size // micro_batch_size
+    
+    prompter = Prompter(prompt_template_name)
+
+    device_map = "auto"
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    ddp = world_size != 1
+    if ddp:
+        print("Training with DDP")
+        device_map = {"": int(os.environ.get("LOCAL_RANK") or 0)}
+        gradient_accumulation_steps = gradient_accumulation_steps // world_size
+
+    if gradient_accumulation_steps < 1:
+        gradient_accumulation_steps = 1
+
+    # Check if parameter passed or if set within environ
+    use_wandb = len(wandb_project) > 0 or (
+        "WANDB_PROJECT" in os.environ and len(os.environ["WANDB_PROJECT"]) > 0
+    )
+    # Only overwrite environ if wandb param passed
+    if len(wandb_project) > 0:
+        os.environ["WANDB_PROJECT"] = wandb_project
+    if len(wandb_watch) > 0:
+        os.environ["WANDB_WATCH"] = wandb_watch
+    if len(wandb_log_model) > 0:
+        os.environ["WANDB_LOG_MODEL"] = wandb_log_model
 
     if int(os.environ.get("LOCAL_RANK", 0)) == 0:
         print(
@@ -80,38 +111,15 @@ def train(
             f"wandb_log_model: {wandb_log_model}\n"
             f"resume_from_checkpoint: {resume_from_checkpoint or False}\n"
             f"prompt template: {prompt_template_name}\n"
+            f"fp16: {fp16}\n"
+            f"gradient_accumulation_steps: {gradient_accumulation_steps}\n",
+            f"world_size: {world_size}\n",
+            f"ddp: {ddp}\n",
+            f"num_samples: {num_samples}\n"
         )
-    assert (
-        base_model
-    ), "Please specify a --base_model, e.g. --base_model='huggyllama/llama-7b'"
-    gradient_accumulation_steps = batch_size // micro_batch_size
-
-    prompter = Prompter(prompt_template_name)
-
-    device_map = "auto"
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
-    ddp = world_size != 1
-    if ddp:
-        print("Training with DDP")
-        device_map = {"": int(os.environ.get("LOCAL_RANK") or 0)}
-        gradient_accumulation_steps = gradient_accumulation_steps // world_size
-
-    # Check if parameter passed or if set within environ
-    use_wandb = len(wandb_project) > 0 or (
-        "WANDB_PROJECT" in os.environ and len(os.environ["WANDB_PROJECT"]) > 0
-    )
-    # Only overwrite environ if wandb param passed
-    if len(wandb_project) > 0:
-        os.environ["WANDB_PROJECT"] = wandb_project
-    if len(wandb_watch) > 0:
-        os.environ["WANDB_WATCH"] = wandb_watch
-    if len(wandb_log_model) > 0:
-        os.environ["WANDB_LOG_MODEL"] = wandb_log_model
-
     model = AutoModelForCausalLM.from_pretrained(
         base_model,
-        load_in_8bit=False,
-        torch_dtype=torch.float16,
+        load_in_8bit=True if not fp16 else False,
         device_map=device_map,
     )
 
@@ -203,14 +211,21 @@ def train(
 
     model.print_trainable_parameters()  # Be more transparent about the % of trainable params.
 
+    train_data = None
     if val_set_size > 0:
         train_val = data["train"].train_test_split(
             test_size=val_set_size, shuffle=True, seed=42
         )
-        train_data = train_val["train"].shuffle().map(generate_and_tokenize_prompt)
+        if num_samples is not None and num_samples > 0:
+            train_data = train_val["train"].select(range(num_samples)).shuffle().map(generate_and_tokenize_prompt)
+        else:
+            train_data = train_val["train"].shuffle().map(generate_and_tokenize_prompt)
         val_data = train_val["test"].shuffle().map(generate_and_tokenize_prompt)
     else:
-        train_data = data["train"].shuffle().map(generate_and_tokenize_prompt)
+        if num_samples is not None and num_samples > 0:
+            train_data = data["train"].select(range(num_samples)).shuffle().map(generate_and_tokenize_prompt)
+        else:
+            train_data = data["train"].shuffle().map(generate_and_tokenize_prompt)
         val_data = None
 
     if not ddp and torch.cuda.device_count() > 1:
