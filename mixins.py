@@ -33,7 +33,7 @@ class HuggingFaceLora:
 
     dataset_path = Parameter(
         "dataset-path",
-        help="path to the dataset; Can be a huggingface dataset or a local path",
+        help="path to the dataset; Can be a huggingface dataset or a local path. For it to be considered a local path it will need to be a .jsonl file",
         default="yahma/alpaca-cleaned",
     )
 

@@ -1,6 +1,24 @@
-from metaflow import S3
+from metaflow import S3, current
+from metaflow.metaflow_config import DATASTORE_SYSROOT_S3
+
 import os
 import shutil
+
+class ModelStoreParams:
+    model_cache_s3_base_path = Parameter(
+        "cache-s3-base-path",
+        help="By default this will use the `metaflow.metaflow_config.DATASTORE_SYSROOT_S3` ie the `METAFLOW_DATASTORE_SYSROOT_S3` configuration variable and use the path to it's parent directory. You can override this by specifying a different path here.",
+        default=os.path.dirname(DATASTORE_SYSROOT_S3),
+    )
+
+    @property
+    def runtime_models_root(self):
+        return os.path.join(self.model_cache_s3_base_path, "trained-models", current.flow_name, current.run_id, current.step_name, current.task_id)
+
+    @property
+    def hf_models_cache_root(self):
+        return os.path.join(self.model_cache_s3_base_path, "huggingface-models")
+
 
 
 class ModelStore:
@@ -53,7 +71,6 @@ class ModelStore:
                 if not os.path.exists(os.path.dirname(move_path)):
                     os.makedirs(os.path.dirname(move_path), exist_ok=True)
                 shutil.move(s3obj.path, os.path.join(download_path, s3obj.key))
-        pass
 
     def upload(self, model_path, store_key):
         """

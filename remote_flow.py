@@ -1,27 +1,11 @@
 from metaflow import FlowSpec, step, Parameter, resources, environment, kubernetes, current, card
 from mixins import HuggingFaceLora, N_GPU, visible_devices
-from metaflow.metaflow_config import DATASTORE_SYSROOT_S3
 from custom_decorators import pip, gpu_profile
 import os
-from model_store import ModelStore
-
-class ModelCacheParams:
-    model_cache_s3_base_path = Parameter(
-        "cache-s3-base-path",
-        help="By default this will use the `metaflow.metaflow_config.DATASTORE_SYSROOT_S3` ie the `METAFLOW_DATASTORE_SYSROOT_S3` configuration variable and use the path to it's parent directory. You can override this by specifying a different path here.",
-        default=os.path.dirname(DATASTORE_SYSROOT_S3),
-    )
-
-    @property
-    def runtime_models_root(self):
-        return os.path.join(self.model_cache_s3_base_path, "trained-models", current.flow_name, current.run_id, current.step_name, current.task_id)
-
-    @property
-    def hf_models_cache_root(self):
-        return os.path.join(self.model_cache_s3_base_path, "huggingface-models")
+from model_store import ModelStore, ModelStoreParams
 
 
-class LlamaInstructionTuning(FlowSpec, HuggingFaceLora, ModelCacheParams):
+class LlamaInstructionTuning(FlowSpec, HuggingFaceLora, ModelStoreParams):
 
     push_checkpoints = Parameter(
         "push", help="push checkpoints on huggingface", default=False, type=bool
