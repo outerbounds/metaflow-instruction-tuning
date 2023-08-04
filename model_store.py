@@ -1,4 +1,4 @@
-from metaflow import S3, current
+from metaflow import S3, current, Parameter
 from metaflow.metaflow_config import DATASTORE_SYSROOT_S3
 
 import os
