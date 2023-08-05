@@ -6,24 +6,38 @@ import json
 import os.path as osp
 from typing import Union
 
+def neither_is_none_or_both_are_none(a, b):
+    if a is None and b is None:
+        return True
+    if a is not None and b is not None:
+        return True
+    return False
+
+def select_first_non_none(*args):
+    for arg in args:
+        if arg is not None:
+            return arg
+    return None
 
 class Prompter(object):
     __slots__ = ("template", "_verbose")
 
-    def __init__(self, template_name: str = "", verbose: bool = False):
+    def __init__(self, template_path: str = None, template_object=None, verbose: bool = False):
+        if neither_is_none_or_both_are_none(template_path, template_object):
+            raise ValueError("Either template_path or template_object must be provided")
+
         self._verbose = verbose
-        if not template_name:
-            # Enforce the default here, so the constructor can be called with '' and will not break.
-            template_name = "alpaca"
-        file_name = f"{template_name}.json"
-        if not osp.exists(file_name):
-            raise ValueError(f"Can't read {file_name}")
-        with open(file_name) as fp:
-            self.template = json.load(fp)
-        if self._verbose:
-            print(
-                f"Using prompt template {template_name}: {self.template['description']}"
-            )
+        if template_path is not None:
+            if not osp.exists(template_path):
+                raise ValueError(f"Can't read {template_path}")
+            with open(template_path) as fp:
+                self.template = json.load(fp)
+            if self._verbose:
+                print(
+                    f"Using prompt template {template_path}: {self.template['description']}"
+                )
+        else:
+            self.template = template_object
 
     def generate_prompt(
         self,

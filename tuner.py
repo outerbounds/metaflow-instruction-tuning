@@ -5,7 +5,8 @@ import fire
 import torch
 import transformers
 from datasets import load_dataset
-
+import omegaconf
+from config import TrainConfig, load_config
 from peft import (
     LoraConfig,
     get_peft_model,
@@ -14,54 +15,23 @@ from peft import (
 )
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from prompter import Prompter
+from prompter import Prompter, neither_is_none_or_both_are_none, select_first_non_none
 
 
-def train(
-    # model/data params
-    base_model: str = "",  # the only required argument
-    data_path: str = "yahma/alpaca-cleaned",
-    output_dir: str = "./lora-alpaca",
-    # training hyperparams
-    batch_size: int = 128,
-    micro_batch_size: int = 4,
-    num_epochs: int = 3,
-    learning_rate: float = 3e-4,
-    cutoff_len: int = 256,
-    val_set_size: int = 200,
-    # lora hyperparams
-    lora_r: int = 8,
-    lora_alpha: int = 16,
-    lora_dropout: float = 0.05,
-    lora_target_modules: List[str] = [
-        "q_proj",
-        "v_proj",
-    ],
-    # llm hyperparams
-    train_on_inputs: bool = True,  # if False, masks out inputs in loss
-    add_eos_token: bool = False,
-    group_by_length: bool = False,  # faster, but produces an odd training loss curve
-    # wandb params
-    wandb_project: str = "",
-    wandb_run_name: str = "",
-    wandb_watch: str = "",  # options: false | gradients | all
-    wandb_log_model: str = "",  # options: false | true
-    resume_from_checkpoint: str = None,  # either training checkpoint or final adapter
-    prompt_template_name: str = "alpaca",  # The prompt template to use, will default to alpaca.
-    fp16: bool = True,
-    num_samples:int = None
-):
-    if isinstance(lora_target_modules, str):
-        lora_target_modules = (
-            lora_target_modules.replace("[", "").replace("]", "").split(",")
-        )
-
+def train(config_file) -> None:
+    config: TrainConfig = load_config(config_file)
+    base_model: str = config.model.base_model  # the only required argument # TrainingParams.base_model
     assert (
-        base_model
-    ), "Please specify a --base_model, e.g. --base_model='huggyllama/llama-7b'"
-    gradient_accumulation_steps = batch_size // micro_batch_size
+        config.model.base_model
+    ), "Please specify a model.base_model, e.g. 'huggyllama/llama-7b'"
+    if neither_is_none_or_both_are_none(config.dataset.local_dataset_path, config.dataset.huggingface_dataset_path):
+        raise ValueError(
+            "Please specify either a dataset.local_dataset_path or a dataset.huggingface_dataset_path, but not both."
+        )
     
-    prompter = Prompter(prompt_template_name)
+    gradient_accumulation_steps = config.training.macro_batch_size // config.training.micro_batch_size
+    
+    prompter = Prompter(template_object=config.dataset.prompt_template)
 
     device_map = "auto"
     world_size = int(os.environ.get("WORLD_SIZE", 1))
@@ -74,52 +44,24 @@ def train(
     if gradient_accumulation_steps < 1:
         gradient_accumulation_steps = 1
 
-    # Check if parameter passed or if set within environ
-    use_wandb = len(wandb_project) > 0 or (
-        "WANDB_PROJECT" in os.environ and len(os.environ["WANDB_PROJECT"]) > 0
-    )
-    # Only overwrite environ if wandb param passed
-    if len(wandb_project) > 0:
-        os.environ["WANDB_PROJECT"] = wandb_project
-    if len(wandb_watch) > 0:
-        os.environ["WANDB_WATCH"] = wandb_watch
-    if len(wandb_log_model) > 0:
-        os.environ["WANDB_LOG_MODEL"] = wandb_log_model
+    use_wandb = False
+    if config.wandb is not None:
+        # Check if parameter passed or if set within environ
+        use_wandb = True
+        # Only overwrite environ if wandb param passed
+        os.environ["WANDB_PROJECT"] = str(config.wandb.project)
+        os.environ["WANDB_WATCH"] = str(config.wandb.watch)
+        os.environ["WANDB_LOG_MODEL"] = str(config.wandb.log_model)
 
     if int(os.environ.get("LOCAL_RANK", 0)) == 0:
-        print(
-            f"Training Alpaca-LoRA model with params:\n"
-            f"base_model: {base_model}\n"
-            f"data_path: {data_path}\n"
-            f"output_dir: {output_dir}\n"
-            f"batch_size: {batch_size}\n"
-            f"micro_batch_size: {micro_batch_size}\n"
-            f"num_epochs: {num_epochs}\n"
-            f"learning_rate: {learning_rate}\n"
-            f"cutoff_len: {cutoff_len}\n"
-            f"val_set_size: {val_set_size}\n"
-            f"lora_r: {lora_r}\n"
-            f"lora_alpha: {lora_alpha}\n"
-            f"lora_dropout: {lora_dropout}\n"
-            f"lora_target_modules: {lora_target_modules}\n"
-            f"train_on_inputs: {train_on_inputs}\n"
-            f"add_eos_token: {add_eos_token}\n"
-            f"group_by_length: {group_by_length}\n"
-            f"wandb_project: {wandb_project}\n"
-            f"wandb_run_name: {wandb_run_name}\n"
-            f"wandb_watch: {wandb_watch}\n"
-            f"wandb_log_model: {wandb_log_model}\n"
-            f"resume_from_checkpoint: {resume_from_checkpoint or False}\n"
-            f"prompt template: {prompt_template_name}\n"
-            f"fp16: {fp16}\n"
-            f"gradient_accumulation_steps: {gradient_accumulation_steps}\n",
-            f"world_size: {world_size}\n",
-            f"ddp: {ddp}\n",
-            f"num_samples: {num_samples}\n"
-        )
+        print("Config:")
+        print(omegaconf.OmegaConf.to_yaml(config))
+        if config.model.local_model:
+            print("Loading local model", base_model)
+        
     model = AutoModelForCausalLM.from_pretrained(
         base_model,
-        load_in_8bit=True if not fp16 else False,
+        load_in_8bit=True if not config.training.fp16 else False,
         device_map=device_map,
     )
 
@@ -127,6 +69,10 @@ def train(
 
     tokenizer.pad_token_id = 0  # unk. we want this to be different from the eos token
     tokenizer.padding_side = "left"  # Allow batched inference
+    
+    cuttoff_len = config.dataset.tokenization.cutoff_len
+    add_eos_token = config.dataset.tokenization.add_eos_token
+    train_on_inputs = config.dataset.tokenization.train_on_inputs
 
     def tokenize(prompt, add_eos_token=True):
         # there's probably a way to do this with the tokenizer settings
@@ -134,13 +80,13 @@ def train(
         result = tokenizer(
             prompt,
             truncation=True,
-            max_length=cutoff_len,
+            max_length=cuttoff_len,
             padding=False,
             return_tensors=None,
         )
         if (
             result["input_ids"][-1] != tokenizer.eos_token_id
-            and len(result["input_ids"]) < cutoff_len
+            and len(result["input_ids"]) < cuttoff_len
             and add_eos_token
         ):
             result["input_ids"].append(tokenizer.eos_token_id)
@@ -177,30 +123,32 @@ def train(
     model = prepare_model_for_int8_training(model)
 
     config = LoraConfig(
-        r=lora_r,
-        lora_alpha=lora_alpha,
-        target_modules=lora_target_modules,
-        lora_dropout=lora_dropout,
-        bias="none",
-        task_type="CAUSAL_LM",
+        r=config.lora.r,
+        lora_alpha=config.lora.alpha,
+        target_modules=config.lora.target_modules,
+        lora_dropout=config.lora.dropout,
+        bias=config.lora.bias,
+        task_type=config.lora.task_type,
     )
     model = get_peft_model(model, config)
 
-    if data_path.endswith(".json") or data_path.endswith(".jsonl"):
-        data = load_dataset("json", data_files=data_path)
+    
+    if config.dataset.local_dataset_path:
+        data = load_dataset("json", data_files=config.dataset.local_dataset_path)
     else:
-        data = load_dataset(data_path)
+        data = load_dataset(config.dataset.huggingface_dataset_path)
 
-    if resume_from_checkpoint:
+    resuming_checkpoint_path = config.model.resuming_checkpoint_path
+    if resuming_checkpoint_path:
         # Check the available weights and load them
         checkpoint_name = os.path.join(
-            resume_from_checkpoint, "pytorch_model.bin"
+            resuming_checkpoint_path, "pytorch_model.bin"
         )  # Full checkpoint
         if not os.path.exists(checkpoint_name):
             checkpoint_name = os.path.join(
-                resume_from_checkpoint, "adapter_model.bin"
+                resuming_checkpoint_path, "adapter_model.bin"
             )  # only LoRA model - LoRA config above has to fit
-            resume_from_checkpoint = False  # So the trainer won't try loading its state
+            resuming_checkpoint_path = False  # So the trainer won't try loading its state
         # The two files above have a different name depending on how they were saved, but are actually the same.
         if os.path.exists(checkpoint_name):
             print(f"Restarting from {checkpoint_name}")
@@ -212,6 +160,8 @@ def train(
     model.print_trainable_parameters()  # Be more transparent about the % of trainable params.
 
     train_data = None
+    val_set_size = config.dataset.validation_set_size
+    num_samples = config.dataset.num_samples
     if val_set_size > 0:
         train_val = data["train"].train_test_split(
             test_size=val_set_size, shuffle=True, seed=42
@@ -238,25 +188,25 @@ def train(
         train_dataset=train_data,
         eval_dataset=val_data,
         args=transformers.TrainingArguments(
-            per_device_train_batch_size=micro_batch_size,
+            per_device_train_batch_size=config.training.micro_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
-            warmup_steps=100,
-            num_train_epochs=num_epochs,
-            learning_rate=learning_rate,
-            fp16=fp16,
-            logging_steps=10,
-            optim="adamw_torch",
+            warmup_steps=config.training.warmup_steps,
+            num_train_epochs=config.training.num_epochs,
+            learning_rate=config.training.learning_rate,
+            fp16=config.training.fp16,
+            logging_steps=config.training.logging_steps,
+            optim=config.training.optimizer,
             evaluation_strategy="steps" if val_set_size > 0 else "no",
             save_strategy="steps",
-            eval_steps=200 if val_set_size > 0 else None,
+            eval_steps=config.training.eval_steps if val_set_size > 0 else None,
             save_steps=200,
-            output_dir=output_dir,
+            output_dir=config.model.model_save_directory,
             save_total_limit=3,
             load_best_model_at_end=True if val_set_size > 0 else False,
             ddp_find_unused_parameters=False if ddp else None,
-            group_by_length=group_by_length,
+            group_by_length=config.training.group_by_length,
             report_to="wandb" if use_wandb else None,
-            run_name=wandb_run_name if use_wandb else None,
+            run_name=config.wandb.run_name if use_wandb else None,
         ),
         data_collator=transformers.DataCollatorForSeq2Seq(
             tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True
@@ -268,9 +218,9 @@ def train(
         model = torch.compile(model)
 
     # with torch.autocast("cuda"):
-    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    trainer.train(resume_from_checkpoint=resuming_checkpoint_path)
 
-    model.save_pretrained(output_dir)
+    model.save_pretrained(config.model.model_save_directory)
 
     print("\n If there's a warning about missing keys above, please disregard :)")
 

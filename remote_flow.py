@@ -23,12 +23,6 @@ class LlamaInstructionTuning(FlowSpec, HuggingFaceLora, ModelStoreParams):
                 store.upload(tmpdirname, base_model)
         self.next(self.finetune)
 
-    @environment(
-        vars={
-            "CUDA_VISIBLE_DEVICES": visible_devices,
-            "WORLD_SIZE": N_GPU,
-        }
-    )
     @gpu_profile(interval=1)
     @kubernetes(image=HF_IMAGE, gpu=N_GPU, cpu=16, memory=72000)
     @pip(libraries={"omegaconf":"2.3.0"})
@@ -43,7 +37,7 @@ class LlamaInstructionTuning(FlowSpec, HuggingFaceLora, ModelStoreParams):
             model_store_root=self.trained_model_path
         )
         base_model = self.config.model.base_model
-        model_save_dir = self.config.training.model_save_directory
+        model_save_dir = self.config.model.model_save_directory
         import os
         import tempfile
         if not hf_model_store.already_exists(base_model):

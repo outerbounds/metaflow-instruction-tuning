@@ -125,40 +125,31 @@ class HuggingFaceLora(ConfigBase):
     def run(self, base_model_path=None, dataset_path=None, env=None):
         import subprocess
         from omegaconf import OmegaConf
-        import json
-        base_model_path = base_model_path if base_model_path is not None else self.config.model.base_model
-        data_path = dataset_path if dataset_path is not None else self.config.dataset.dataset_path
-        sample_arg = []
-        if self.config.dataset.num_data_samples is not None:
-            sample_arg = [f"--num-samples={self.config.dataset.num_data_samples}"]
         # TODO set `--nproc_per_node` based on `visible_devices` setting.
         visible_devices = self.config.training.visible_devices
+        
         if visible_devices is None or visible_devices == "auto":
             device_list = GPUProfiler._read_devices()
             visible_devices = str(len(device_list))
         
-        prompt_dict = OmegaConf.to_container(self.config.dataset.prompt_template)
-        tmpfile = _to_file(bytes(json.dumps(prompt_dict), "utf-8"), extension="json")
-        import os
+        if dataset_path is not None:
+            self.config.dataset.local_dataset_path = dataset_path
+            self.config.dataset.huggingface_dataset_path = None
+        if base_model_path is not None:
+            self.config.model.base_model = base_model_path
+            self.config.model.local_model = True
+            
+        config_yml = OmegaConf.to_yaml(self.config)
+        tmpfile = _to_file(bytes(config_yml, "utf-8"))
         subprocess.run(
             [ 
                 f"torchrun",
+                "--nnodes=1",
                 f"--nproc_per_node={visible_devices}",
                 f"--master_port={self.config.training.master_port}",
                 "tuner.py",
-                f"--base_model='{base_model_path}'",
-                f"--num_epochs={self.config.training.num_epochs}",
-                f"--cutoff_len={self.config.training.cutoff_len}",
-                f"--batch_size={self.config.training.macro_batch_size}",
-                "--train_on_inputs",
-                f"--output_dir={self.config.training.model_save_directory}",
-                f"--lora_target_modules={self.config.lora.target_modules}",
-                f"--lora_r={self.config.lora.r}",
-                f"--micro_batch_size={self.config.training.micro_batch_size}",
-                f"--fp16={self.config.training.fp16}",
-                f"--data-path={data_path}",
-                f"--prompt-template-name={str(os.path.basename(tmpfile.name)).replace('.json', '')}",
-            ] + sample_arg,
+                f"{tmpfile.name}",
+            ],
             env=env,
             check=True
         )

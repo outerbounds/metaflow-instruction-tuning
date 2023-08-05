@@ -2,20 +2,33 @@ training:
   num_epochs: 1
   macro_batch_size: 1
   visible_devices: null
-  world_size: 2
   cutoff_len: 258
   micro_batch_size: 1
-  model_save_directory: ./lora-alpaca
+  learning_rate: 0.0003
   master_port: 1234
   fp16: false
+  eval_steps: 200
+  group_by_length: true
+  optimizer: adamw_torch
+  logging_steps: 100
+  warmup_steps: 100
 model:
   base_model: yahma/llama-7b-hf
+  resuming_checkpoint_path: null
+  model_save_directory: ./lora-alpaca
 lora:
   r: 2
-  target_modules: '[q_proj,v_proj]'
+  target_modules:
+  - q_proj
+  - v_proj
+  alpha: 16
+  dropout: 0.05
+  bias: none
+  task_type: CAUSAL_LM
 dataset:
-  num_data_samples: 500
-  dataset_path: yahma/alpaca-cleaned
+  num_samples: 200
+  huggingface_dataset_path: yahma/alpaca-cleaned
+  local_dataset_path: null
   prompt_template:
     description: Template used by Alpaca-LoRA.
     prompt_input: 'Below is an instruction that describes a task, paired with an input
@@ -44,3 +57,9 @@ dataset:
 
       '
     response_split: '### Response:'
+  tokenization:
+    add_eos_token: true
+    cutoff_len: 258
+    train_on_inputs: true
+  val_set_size: 200
+wandb: null
