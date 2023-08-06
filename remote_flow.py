@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, step, Parameter, resources, environment, kubernetes, current, card
+from metaflow import FlowSpec, step, Parameter, resources, environment, kubernetes, current, card, project
 from mixins import HuggingFaceLora, N_GPU, visible_devices
 from custom_decorators import pip, gpu_profile
 import os
@@ -6,9 +6,12 @@ from model_store import ModelStore, ModelStoreParams
 
 # HF_IMAGE = "006988687827.dkr.ecr.us-west-2.amazonaws.com/llm/hf-lora-pt:latest"
 HF_IMAGE =  "valayob/hf-transformer-gpu:4.29.2.3"
+
+@project(name="lora")
 class LlamaInstructionTuning(FlowSpec, HuggingFaceLora, ModelStoreParams):
 
     @card
+    @kubernetes(image=HF_IMAGE, cpu=2, memory=5000)
     @step
     def start(self):
         store = ModelStore(

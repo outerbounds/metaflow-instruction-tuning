@@ -57,7 +57,7 @@ class ConfigBase:
         self._config = self._resolve_config()
         return self._config
 
-    experiment_config_file = IncludeFile("config-file", help="experiment config file", default=None)
+    experiment_config_file = IncludeFile("config-file", help="experiment config file path", default="experiment_config.yaml")
 
     experiment_config = Parameter("config", help="experiment config", default=None, type=JSONType)
 

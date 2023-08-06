@@ -17,16 +17,16 @@ model:
   resuming_checkpoint_path: null
   model_save_directory: ./lora-alpaca
 lora:
-  r: 2
+  rank: 16
   target_modules:
   - q_proj
   - v_proj
-  alpha: 16
+  alpha: 32
   dropout: 0.05
   bias: none
   task_type: CAUSAL_LM
 dataset:
-  num_samples: 200
+  num_samples: 1000
   huggingface_dataset_path: yahma/alpaca-cleaned
   local_dataset_path: null
   prompt_template:

@@ -1,6 +1,10 @@
-from omegaconf import OmegaConf, MISSING
-from typing import Union, Optional, List
+from typing import Union, Optional, List, Any
 from dataclasses import dataclass, field
+
+try:
+    from omegaconf import MISSING
+except ImportError:
+    MISSING: Any = "???"
 
 @dataclass
 class ModelParams:
@@ -12,10 +16,10 @@ class ModelParams:
 @dataclass
 class TrainingParams:
     num_epochs: int = 1
-    macro_batch_size: int = 8
+    macro_batch_size: int = 1
     visible_devices: Optional[str] = None # Can be auto / or a number
     cutoff_len: int = 258
-    micro_batch_size: int = 4
+    micro_batch_size: int = 1
     learning_rate: float = 3e-4
     master_port: int = 1234
     fp16: bool = True
@@ -28,7 +32,7 @@ class TrainingParams:
 
 @dataclass
 class LoraParams:
-    r: int = 2
+    rank: int = 2
     target_modules: List[str] = field(default_factory=lambda: ["q_proj","v_proj"])
     alpha:int = 16
     dropout:float = 0.05
@@ -78,10 +82,12 @@ class TrainConfig:
 
 
 def create_config(filepath):
+    from omegaconf import OmegaConf
     conf:TrainConfig = OmegaConf.structured(TrainConfig)
     OmegaConf.save(conf, filepath)
 
 def load_config(filepath):
+    from omegaconf import OmegaConf
     conf = OmegaConf.load(filepath)
     schema:TrainConfig = OmegaConf.structured(TrainConfig)
     trainconf:TrainConfig = OmegaConf.merge(schema, conf)

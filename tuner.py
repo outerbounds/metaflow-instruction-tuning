@@ -122,18 +122,21 @@ def train(config_file) -> None:
 
     model = prepare_model_for_int8_training(model)
 
-    config = LoraConfig(
-        r=config.lora.r,
+    # Need to do some type conversion here as native omegaconf types are
+    # not serializable by HF Trainer. For example config.lora.target_modules
+    # is a ListConfig but is expected to be a native list which is easily serializable.
+    lora_config = LoraConfig(
+        r=config.lora.rank,
         lora_alpha=config.lora.alpha,
-        target_modules=config.lora.target_modules,
+        target_modules=list(config.lora.target_modules),
         lora_dropout=config.lora.dropout,
         bias=config.lora.bias,
         task_type=config.lora.task_type,
     )
-    model = get_peft_model(model, config)
+    model = get_peft_model(model, lora_config)
 
     
-    if config.dataset.local_dataset_path:
+    if config.dataset.local_dataset_path is not None:
         data = load_dataset("json", data_files=config.dataset.local_dataset_path)
     else:
         data = load_dataset(config.dataset.huggingface_dataset_path)
@@ -160,7 +163,7 @@ def train(config_file) -> None:
     model.print_trainable_parameters()  # Be more transparent about the % of trainable params.
 
     train_data = None
-    val_set_size = config.dataset.validation_set_size
+    val_set_size = config.dataset.val_set_size
     num_samples = config.dataset.num_samples
     if val_set_size > 0:
         train_val = data["train"].train_test_split(
