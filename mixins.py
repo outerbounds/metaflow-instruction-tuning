@@ -8,6 +8,7 @@ import tempfile
 
 N_GPU = 2
 visible_devices = str(list(range(N_GPU)))[1:-1]
+HF_IMAGE =  "valayob/hf-transformer-gpu:4.29.2.3"
 
 
 def _to_file(file_bytes, extension=None):
