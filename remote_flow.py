@@ -65,9 +65,6 @@ class LlamaInstructionTuning(FlowSpec, HuggingFaceLora, ModelStoreParams):
 
         if not hf_model_store.already_exists(base_model):
             raise ValueError(f"Model {base_model} not found in the model store. This shouldn't happen.")
-        with tempfile.TemporaryDirectory() as datasetdir:
-            with S3() as s3:
-                s3.get()
                     
         with tempfile.TemporaryDirectory() as tmpdirname:
             hf_model_store.download(base_model, tmpdirname)

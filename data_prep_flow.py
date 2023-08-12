@@ -92,8 +92,7 @@ class DataPrepFlow(FlowSpec):
             )
         return all_data
                 
-    # @kubernetes(image=HF_IMAGE, cpu=2, memory=5000)
-    # @pip(libraries={"omegaconf":"2.3.0"})
+    @pip(libraries={"huggingface-hub":"0.16.4"})
     @card
     @step
     def start(self):
@@ -106,21 +105,16 @@ class DataPrepFlow(FlowSpec):
         
         with tempfile.TemporaryDirectory() as final_data_path:
             import json
-            print(all_data_dict[0])
             with open(os.path.join(final_data_path, f"{self.hf_dataset_path.split('/')[-1]}.json"), "w") as f:
                 json.dump(all_data_dict, f)
             self.remote_dataset_path = self._upload_dataset(final_data_path)
                 
         self.next(self.end)
     
-    # @pip(libraries={"omegaconf":"2.3.0"})
     @step
     def end(self):
         from metaflow.integrations import ArgoEvent
         from metaflow import current
-        from omegaconf import OmegaConf
-        # current.project_name
-        import json
         
         if self.raise_event:
             if len(self.remote_dataset_path) > 0:

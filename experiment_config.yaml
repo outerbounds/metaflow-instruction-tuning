@@ -26,7 +26,7 @@ lora:
   bias: none
   task_type: CAUSAL_LM
 dataset:
-  num_samples: 1000
+  num_samples: null
   huggingface_dataset_path: yahma/alpaca-cleaned
   local_dataset_path: null
   prompt_template:
