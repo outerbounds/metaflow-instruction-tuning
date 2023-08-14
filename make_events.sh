@@ -3,4 +3,4 @@
 
 python remote_flow.py --branch rank16 argo-workflows create 
 python data_prep_flow.py argo-workflows create 
-python data_prep_flow.py argo-workflows trigger 
+python data_prep_flow.py argo-workflows trigger --raise-event True

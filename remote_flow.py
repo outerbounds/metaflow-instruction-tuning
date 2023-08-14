@@ -8,7 +8,7 @@ from model_store import ModelStore, ModelStoreParams
 HF_IMAGE =  "valayob/hf-transformer-gpu:4.29.2.3"
 
 @project(name="lora")
-@trigger(event="alpaca.dataprep")
+@trigger(event={"name":"alpaca.dataprep", "parameters":{"s3-dataset-path":"dataset_path"}})
 class LlamaInstructionTuning(FlowSpec, HuggingFaceLora, ModelStoreParams):
 
     s3_dataset_path = Parameter(
@@ -59,9 +59,9 @@ class LlamaInstructionTuning(FlowSpec, HuggingFaceLora, ModelStoreParams):
         
         dataset_temp_file = None
         if self.s3_dataset_path is not None:
+            print(f"Using dataset path {self.s3_dataset_path} provided by the user")
             dataset_temp_file = tempfile.NamedTemporaryFile(suffix=".json")
             self._download_dataset_from_s3(dataset_temp_file.name)
-            print(f"Using dataset path {self.s3_dataset_path} provided by the user dowloaded at : {dataset_temp_file}")
 
         if not hf_model_store.already_exists(base_model):
             raise ValueError(f"Model {base_model} not found in the model store. This shouldn't happen.")

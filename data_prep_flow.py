@@ -47,7 +47,6 @@ class DataPrepFlow(FlowSpec):
         help = "Raise event to trigger training",
         default = False,
         type = bool,
-        is_flag=True
     )
 
     def _upload_dataset(self, data_path):
@@ -61,7 +60,7 @@ class DataPrepFlow(FlowSpec):
             return s3_resp
     
     def _format_to_instruction_tune(self, data_arr):
-        needed_keys = ["instruction", "output"]
+        needed_keys = ["instruction", "output" ]
         # If the input is in alpaca format then let it be
         if all([dict_contains_all_keys(d, needed_keys) for d in data_arr]):
             print("Data contains all necessary keys")
@@ -71,14 +70,16 @@ class DataPrepFlow(FlowSpec):
         final_arr = []
         key_map = {
             "response": "output",
-            "instruction": "instruction"
+            "instruction": "instruction",
+            "context": "input"
         }
         for d in data_arr:
             data_dict = {}
             for k in key_map:
                 if k not in d:
-                    raise Exception (f"Key {k} not found in the data")
-                data_dict[key_map[k]] = d[k]
+                    data_dict[key_map[k]] = None
+                else:
+                    data_dict[key_map[k]] = d[k]
             final_arr.append(data_dict)
         return final_arr
             
@@ -118,12 +119,13 @@ class DataPrepFlow(FlowSpec):
         
         if self.raise_event:
             if len(self.remote_dataset_path) > 0:
+                key, s3_path = self.remote_dataset_path[0]
                 ArgoEvent(
                     name=f"{current.project_name}.dataprep",
                 ).publish(
                     payload={
                         # remote_dataset_path should only have one file since we join all the files together.
-                        "s3_dataset_path": self.remote_dataset_path[0],
+                        "dataset_path": s3_path,
                     }
                 )
             else:
