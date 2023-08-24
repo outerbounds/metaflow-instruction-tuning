@@ -100,10 +100,13 @@ class DataPrepFlow(FlowSpec):
         assert len(self.hf_dataset_path.split("/")) > 1
         from huggingface_hub import snapshot_download
         import tempfile
+        # Download the Dataset from huggingface and transform it to Alpaca format
+        # transform all the files in the dataset to one file and then upload it to S3
         with tempfile.TemporaryDirectory() as tmpdir:
             data_path = snapshot_download(repo_id=self.hf_dataset_path, repo_type="dataset", local_dir=tmpdir, local_dir_use_symlinks=False)
             all_data_dict = self._transform_data(data_path)
         
+        # Once the dataset is transformed, upload it to S3. 
         with tempfile.TemporaryDirectory() as final_data_path:
             import json
             with open(os.path.join(final_data_path, f"{self.hf_dataset_path.split('/')[-1]}.json"), "w") as f:
@@ -117,6 +120,7 @@ class DataPrepFlow(FlowSpec):
         from metaflow.integrations import ArgoEvent
         from metaflow import current
         
+        # Once the dataset is uploaded, raise an event to trigger training
         if self.raise_event:
             if len(self.remote_dataset_path) > 0:
                 key, s3_path = self.remote_dataset_path[0]
