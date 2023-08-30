@@ -1,7 +1,7 @@
 from functools import wraps
 
 
-def pip(file):
+def pip(file=None, libraries=None):
     def decorator(function):
         @wraps(function)
         def wrapper(*args, **kwargs):
@@ -9,22 +9,25 @@ def pip(file):
             import subprocess
             import sys
 
-            libraries = {}
-            with open(file, 'r') as reqs:
-                lines = [line.split('\n')[0] for line in reqs.readlines()]
-                for line in lines:
-                    result = line.split('==')
-                    if len(result) == 2:
-                        library, version = result[0], result[1]
-                        libraries[library] = version
-                    elif len(result) == 1:
-                        library = result[0]
-                        libraries[library] = ""
-                    else:
-                        raise ValueError('Each line in requirements.txt file ')
-                
+            _libraries = {}
+            if file is not None:
+                with open(file, "r") as reqs:
+                    lines = [line.split("\n")[0] for line in reqs.readlines()]
+                    for line in lines:
+                        result = line.split("==")
+                        if len(result) == 2:
+                            library, version = result[0], result[1]
+                            _libraries[library] = version
+                        elif len(result) == 1:
+                            library = result[0]
+                            _libraries[library] = ""
+                        else:
+                            raise ValueError("Each line in requirements.txt file ")
+            
+            else:
+                _libraries = libraries
 
-            for library, version in libraries.items():
+            for library, version in _libraries.items():
                 print("Pip Install:", library, version)
                 if version != "":
                     subprocess.run(
@@ -37,9 +40,7 @@ def pip(file):
                         ]
                     )
                 else:
-                    subprocess.run(
-                        [sys.executable, "-m", "pip", "install", library]
-                    )
+                    subprocess.run([sys.executable, "-m", "pip", "install", library])
 
             return function(*args, **kwargs)
 
@@ -50,12 +51,18 @@ def pip(file):
 
 def enable_decorator(dec, flag):
     flag = int(flag)
-    assert flag in [0,1], "Flag must be set to a 0 or 1. Set it in CLI like: `export REMOTE=1`"
+    assert flag in [
+        0,
+        1,
+    ], "Flag must be set to a 0 or 1. Set it in CLI like: `export REMOTE=1`"
+
     def decorator(func):
         if flag:
             return dec(func)
         return func
+
     return decorator
+
 
 import re
 import os

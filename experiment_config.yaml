@@ -1,0 +1,65 @@
+training:
+  num_epochs: 1
+  macro_batch_size: 1
+  visible_devices: null
+  cutoff_len: 258
+  micro_batch_size: 1
+  learning_rate: 0.0003
+  master_port: 1234
+  fp16: false
+  eval_steps: 200
+  group_by_length: true
+  optimizer: adamw_torch
+  logging_steps: 100
+  warmup_steps: 100
+model:
+  base_model: yahma/llama-7b-hf
+  resuming_checkpoint_path: null
+  model_save_directory: ./lora-alpaca
+lora:
+  rank: 16
+  target_modules:
+  - q_proj
+  - v_proj
+  alpha: 32
+  dropout: 0.05
+  bias: none
+  task_type: CAUSAL_LM
+dataset:
+  num_samples: null
+  huggingface_dataset_path: yahma/alpaca-cleaned
+  local_dataset_path: null
+  prompt_template:
+    description: Template used by Alpaca-LoRA.
+    prompt_input: 'Below is an instruction that describes a task, paired with an input
+      that provides further context. Write a response that appropriately completes
+      the request.
+
+      ### Instruction:
+
+      {instruction}
+
+      ### Input:
+
+      {input}
+
+      ### Response:
+
+      '
+    prompt_no_input: 'Below is an instruction that describes a task. Write a response
+      that appropriately completes the request.
+
+      ### Instruction:
+
+      {instruction}
+
+      ### Response:
+
+      '
+    response_split: '### Response:'
+  tokenization:
+    add_eos_token: true
+    cutoff_len: 258
+    train_on_inputs: true
+  val_set_size: 200
+wandb: null

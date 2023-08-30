@@ -101,7 +101,8 @@ class GPUProfiler:
         except:
             return None, None, "nvidia-smi error"
 
-    def _read_devices(self):
+    @staticmethod
+    def _read_devices():
         out = check_output(
             [
                 "nvidia-smi",

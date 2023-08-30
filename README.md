@@ -69,13 +69,12 @@ python flow.py run --base-model "model_name"
 
 #### Local run
 ```
-python flow.py run
+python flow.py run --config-file experiment_config.yaml
 ```
 
-#### Remote run
-If you run the `tune` step as a remote task (with Metaflow's `@batch` or `@kubernetes` decorator), then you need to tell Metaflow to package extra files in this repository, so they can be used on the remote instance.
+#### Running on kubernetes
 ```
-python flow.py --package-suffixes=.txt,.json run
+python remote_flow.py run --config-file experiment_config.yaml
 ```
 
 #### Workflow description

@@ -1,3 +1,4 @@
+# Sample Flow For running on Corweave instances. 
 from metaflow import FlowSpec, step, Parameter, resources, environment
 from mixins import HuggingFaceLora, N_GPU, visible_devices
 from custom_decorators import pip, gpu_profile
@@ -12,10 +13,8 @@ class LlamaInstructionTuning(FlowSpec, HuggingFaceLora):
         self.next(self.finetune)
 
     @environment(vars={
-        "CUDA_VISIBLE_DEVICES": visible_devices, 
-        "WORLD_SIZE": N_GPU,
-        "HUGGINGFACE_TOKEN": os.environ["HUGGINGFACE_TOKEN"],
-        "HF_ORGANIZATION": os.environ["HF_ORGANIZATION"]
+        # "HUGGINGFACE_TOKEN": os.environ["HUGGINGFACE_TOKEN"],
+        # "HF_ORGANIZATION": os.environ["HF_ORGANIZATION"]
     })
     @gpu_profile(interval=1)
     @pip(file="requirements.txt")
