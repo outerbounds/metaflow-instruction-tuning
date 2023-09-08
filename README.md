@@ -36,7 +36,11 @@ Note that this is not required to run the code and pushing checkpoints is disabl
 ## Run the code
 
 ### Fine-tuning
-The datasets and models are already on the HuggingFace Hub, and the code is configured to pull them. You can run the workflow in the `flow.py` file with this Metaflow command:
+The datasets and models are already on the HuggingFace Hub, and the code is configured to pull them. You can run the workflow in the `flow.py` / `remote_flow.py` file with this Metaflow command:
+
+```
+python flow.py run --config-file experiment_config.yaml
+```
 
 #### Custom Dataset
 
@@ -79,6 +83,20 @@ python remote_flow.py run --config-file experiment_config.yaml
 
 #### Workflow description
 Under the hood, the workflow calls the `tuner.py` file using a call to `torchrun` in the `tune` step, which is originally sourced from the [tloen/alpaca-lora repository](https://github.com/tloen/alpaca-lora). This template can be readily adapted for many types of HuggingFace model. Feel free to fork and customize this repository to your needs - for example to expose more of the parameters for training, to try new modeling approaches, custom data, and to add/modify steps in the workflow. 
+
+### Event Triggered Workflows
+
+The [data_prep_flow.py](./data_prep_flow.py) is a flow that will create a dataset and emit an event that will trigger the [remote_flow.py](./remote_flow.py) to run. This is useful if you want to run the flow when a new dataset is available. The [remote_flow.py](./remote_flow.py) contains the `@trigger` decorator which will listen to the `alpaca.dataprep` event. To deploy event triggered workflows, you need to deploy the workflows on argo-workflows. 
+
+Example: 
+
+```bash
+# Create a workflow deployment for remote_flow.py which listens to the alpaca.dataprep event
+python remote_flow.py argo-workflows create 
+python data_prep_flow.py argo-workflows create 
+# Trigger the data_prep_flow.py which will emit the alpaca.dataprep event upon completion. The --raise-event parameter is added to flow to emit the event when it completes preparing the dataset. 
+python data_prep_flow.py argo-workflows trigger --raise-event True
+```
 
 ### Evaluation
 For the evaluation we use the [LM Evaluation Harness](https://github.com/EleutherAI/lm-evaluation-harness) package. Although not enabled by default since it requires extra steps, we do recommend pushing the models on the HuggingFace Hub if you expect to revisit the model training in the future or wish to do more customized evaluation and deployment processes with the resulting model. 
