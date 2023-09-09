@@ -61,11 +61,7 @@ Format should be as follows
 #### Large Language Models
 
 By default, code runs using LLaMA 7B as a base model, but it should be easy
-to use any other model from HuggingFace.
-
-```
-python flow.py run --base-model "model_name"
-```
+to use any other model from HuggingFace. Simply change the file to `model.base_model` attribute in the configuration file ([experiment_config.yaml](./experiment_config.yaml)). 
 
 #### Local run
 ```
