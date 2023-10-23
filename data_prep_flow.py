@@ -1,4 +1,4 @@
-from metaflow import FlowSpec, step, project, kubernetes, Parameter, S3, card
+from metaflow import FlowSpec, step, project, kubernetes, Parameter, S3, card, pypi
 # from mixins import HF_IMAGE
 from custom_decorators import pip
 import os
@@ -93,7 +93,7 @@ class DataPrepFlow(FlowSpec):
             )
         return all_data
                 
-    @pip(libraries={"huggingface-hub":"0.16.4"})
+    @pypi(packages={"huggingface-hub":"0.16.4"})
     @card
     @step
     def start(self):

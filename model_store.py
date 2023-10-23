@@ -1,5 +1,5 @@
 from metaflow import S3, current, Parameter
-from metaflow.metaflow_config import DATASTORE_SYSROOT_S3
+from metaflow.metaflow_config import DATATOOLS_S3ROOT
 
 import os
 import shutil
@@ -8,7 +8,7 @@ class ModelStoreParams:
     model_cache_s3_base_path = Parameter(
         "cache-s3-base-path",
         help="By default this will use the `metaflow.metaflow_config.DATASTORE_SYSROOT_S3` ie the `METAFLOW_DATASTORE_SYSROOT_S3` configuration variable and use the path to it's parent directory. You can override this by specifying a different path here.",
-        default=os.path.dirname(DATASTORE_SYSROOT_S3),
+        default=os.path.join(DATATOOLS_S3ROOT, "model-store"),
     )
 
     @property
