@@ -1,37 +1,7 @@
 from metaflow import FlowSpec, step, project, kubernetes, Parameter, S3, card, pypi
 # from mixins import HF_IMAGE
-from custom_decorators import pip
 import os
-import glob
-
-
-def find_json_files_in_directory(directory):
-    json_files = glob.glob(os.path.join(directory, "*.json"))
-    jsonl_files = glob.glob(os.path.join(directory, "*.jsonl"))
-
-    all_files = json_files + jsonl_files
-    return all_files
-
-def load_json_files(file_paths):
-    
-    def _load_json_file(path):
-        import json
-        with open(path, "r") as f:
-            return json.load(f)
-    
-    def _load_jsonl_file(path):
-        import json
-        with open(path, "r") as f:
-            return [json.loads(line) for line in f.readlines()]
-    
-    for f in file_paths:
-        if f.endswith(".json"):
-            yield _load_json_file(f)
-        elif f.endswith(".jsonl"):
-            yield _load_jsonl_file(f)
-
-def dict_contains_all_keys(d, keys):
-    return all([k in d for k in keys])
+from hf_data_prep_utils import transform_data_to_instruction_tune, find_json_files_in_directory
 
 @project(name="alpaca")
 class DataPrepFlow(FlowSpec):
@@ -48,50 +18,6 @@ class DataPrepFlow(FlowSpec):
         default = False,
         type = bool,
     )
-
-    def _upload_dataset(self, data_path):
-        json_files = find_json_files_in_directory(data_path)
-        with S3(run=self) as s3:
-            s3_resp = s3.put_files([
-                (
-                os.path.join("dataset",os.path.basename(f)),f
-                ) for f in json_files
-            ], )
-            return s3_resp
-    
-    def _format_to_instruction_tune(self, data_arr):
-        needed_keys = ["instruction", "output" ]
-        # If the input is in alpaca format then let it be
-        if all([dict_contains_all_keys(d, needed_keys) for d in data_arr]):
-            print("Data contains all necessary keys")
-            return data_arr
-        
-        # If the input is not in Alpaca format then convert it 
-        final_arr = []
-        key_map = {
-            "response": "output",
-            "instruction": "instruction",
-            "context": "input"
-        }
-        for d in data_arr:
-            data_dict = {}
-            for k in key_map:
-                if k not in d:
-                    data_dict[key_map[k]] = None
-                else:
-                    data_dict[key_map[k]] = d[k]
-            final_arr.append(data_dict)
-        return final_arr
-            
-
-    def _transform_data(self, data_path):
-        json_files = find_json_files_in_directory(data_path)
-        all_data = []
-        for data_arr in load_json_files(json_files):
-            all_data.extend(
-                self._format_to_instruction_tune(data_arr)
-            )
-        return all_data
                 
     @pypi(packages={"huggingface-hub":"0.16.4"})
     @card
@@ -104,7 +30,7 @@ class DataPrepFlow(FlowSpec):
         # transform all the files in the dataset to one file and then upload it to S3
         with tempfile.TemporaryDirectory() as tmpdir:
             data_path = snapshot_download(repo_id=self.hf_dataset_path, repo_type="dataset", local_dir=tmpdir, local_dir_use_symlinks=False)
-            all_data_dict = self._transform_data(data_path)
+            all_data_dict = transform_data_to_instruction_tune(data_path)
         
         # Once the dataset is transformed, upload it to S3. 
         with tempfile.TemporaryDirectory() as final_data_path:
@@ -135,6 +61,16 @@ class DataPrepFlow(FlowSpec):
             else:
                 print("No dataset path found. No event was raised.")
         print("Completed!")
+    
+    def _upload_dataset(self, data_path):
+        json_files = find_json_files_in_directory(data_path)
+        with S3(run=self) as s3:
+            s3_resp = s3.put_files([
+                (
+                os.path.join("dataset",os.path.basename(f)),f
+                ) for f in json_files
+            ], )
+            return s3_resp
 
 if __name__ == "__main__":
     DataPrepFlow()
